@@ -1,6 +1,12 @@
 var firstRun = false;
 var LayerGroups = [];
 var legendLayer = false;
+var timeRangeMax = [0, 86400];
+var timeRange = [0, 86400];
+
+function mapBetween(currentNum, minAllowed, maxAllowed, min, max) {
+  return (maxAllowed - minAllowed) * (currentNum- min) / (max - min) + minAllowed;
+}
 
 function perc2color(perc,min,max) {
   var base = (max - min);
@@ -27,6 +33,17 @@ function findNode(node, nodes) {
     if (nd['id'] === node) return nd;
   }
   return {'id': node, "longName": node, "shortName":"notf","macaddr":"","hwModel":"","lastSeen":-1}
+}
+
+function timeAlpha(time, rangeLow, rangeHigh) {
+  const invertRangeLow = timeRangeMax[1] - rangeLow;
+  const invertRangeHigh = timeRangeMax[1] - rangeHigh;
+  const currentTime = Math.floor(Date.now() / 1000);
+  const diff = currentTime - time;
+  if (diff <= invertRangeLow && diff >= invertRangeHigh) {
+    return mapBetween(diff, 0, 100, invertRangeLow, invertRangeHigh) / 100;
+  }
+  return 0;
 }
 
 function legend(low,high,name){
@@ -78,7 +95,8 @@ function drawMap(layerControl, data, nodes) {
       var circle = L.circle([element["lat"], element["lon"]], {
         color: perc2color(element["snr"],lowSnr,highSnr),
         fillColor: perc2color(element["snr"],lowSnr,highSnr),
-        fillOpacity: 0.5,
+        fillOpacity: timeAlpha(element['time'], timeRange[0], timeRange[1]),
+        opacity: timeAlpha(element['time'], timeRange[0], timeRange[1]),
         radius: 5,
         node: node,
         data: element,
@@ -112,7 +130,7 @@ function showRSSIButton() {
       layerDone = true;
       layer.setStyle({
         "color": perc2color(layer['options']['data']['rssi'], layer['options']['rssiRange'][0], layer['options']['rssiRange'][1]),
-        "fill": perc2color(layer['options']['data']['rssi'], layer['options']['rssiRange'][0], layer['options']['rssiRange'][1]),
+        "fillColor": perc2color(layer['options']['data']['rssi'], layer['options']['rssiRange'][0], layer['options']['rssiRange'][1]),
       })
     })
   }
@@ -127,7 +145,18 @@ function showSNRButton() {
       layerDone = true;
       layer.setStyle({
         "color": perc2color(layer['options']['data']['snr'], layer['options']['snrRange'][0], layer['options']['snrRange'][1]),
-        "fill": perc2color(layer['options']['data']['snr'], layer['options']['snrRange'][0], layer['options']['snrRange'][1]),
+        "fillColor": perc2color(layer['options']['data']['snr'], layer['options']['snrRange'][0], layer['options']['snrRange'][1]),
+      })
+    })
+  }
+}
+
+function updateTimeRange(range) {
+  for (var key in LayerGroups) {
+    LayerGroups[key].eachLayer(function(layer) {
+      layer.setStyle({
+        "fillOpacity": timeAlpha(layer['options']['data']['time'], range[0], range[1]),
+        "opacity": timeAlpha(layer['options']['data']['time'], range[0], range[1]),
       })
     })
   }
@@ -173,3 +202,17 @@ webSocket = new WebSocket("wss://portal.nurdspace.nl/ws", "dingen");
 webSocket.onmessage = (event) => {
   console.log(event.data);
 };
+
+$( function() {
+  $( "#slider" ).slider({
+    values: timeRangeMax,
+    min: timeRangeMax[0],
+    max: timeRangeMax[1],
+    step: 60,
+    range: true,
+    stop: function(event, ui) {
+      updateTimeRange(ui.values);
+      timeRange = ui.values;
+    }
+  });
+} );

@@ -2,19 +2,22 @@
     <head>
         <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
         <link rel="stylesheet" href="map.css" />
+        <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css" />
+        <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/dark-hive/jquery-ui.css" />
         <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
         <script src="jquery-3.6.4.min.js"></script>
+        <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     </head>
     <body>
         <div id="bodywrapper">
-            <div style="width: 100vw; height: 20px" id="controlbar">
-                Some controls go here
+            <div style="width: 100vw; height: 45px" id="controlbar">
+                <div style="width:300px;" id="slider"></div>&nbsp;&nbsp;
                 <button onClick="updateMap()">Update</button>
                 <button onClick="showRSSIButton()">Show RSSI</button>
                 <button onClick="showSNRButton()">Show SNR</button>
             </div>
             <div style="width: 100vw; height: 100vh" id="map"></div>
         </div>
-        <script src="map.js"></script>
+        <script src="map.js?a=1"></script>
     </body>
 </html>
