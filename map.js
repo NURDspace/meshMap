@@ -19,15 +19,14 @@ function perc2color(perc,min,max) {
   return '#' + ('000000' + h.toString(16)).slice(-6);
 }
 
-var map = L.map('map', {center: L.latLng(51.9733648, 5.669929), zoom: 15});
-//L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png').addTo(map);
+function findNode(node, nodes) {
+  for (const nd of nodes) {
+    if (nd['id'] === node) return nd;
+  }
+  return {'id': 0, "longName": "Not found", "shortName":"notf","macaddr":"","hwModel":"","lastSeen":-1}
+}
 
-$.ajax({
-  url: "https://portal.nurdspace.nl/sdr/api/locations",
-  dataType: 'json',
-  cache: false
-}).done(function(data){
+function drawMap(data, nodes) {
   var snr = [];
   var rssi = [];
   for (const element of data) {
@@ -43,16 +42,22 @@ $.ajax({
 
 
   //Add Elements
+  let points = [];
   for (const element of data) {
-    var circle = L.circle([element["lat"], element["lon"]], {
-      color: perc2color(element["snr"],lowSnr,highSnr),
-      fillColor: perc2color(element["snr"],lowSnr,highSnr),
-      fillOpacity: 0.5,
-      radius: 5
-    })
-    circle.bindPopup(`SNR: ${element["snr"]}<br>RSSI: ${element["rssi"]}`);
-    circle.addTo(map);
+    if (element["lat"] && element["lon"]) {
+      var circle = L.circle([element["lat"], element["lon"]], {
+        color: perc2color(element["snr"],lowSnr,highSnr),
+        fillColor: perc2color(element["snr"],lowSnr,highSnr),
+        fillOpacity: 0.5,
+        radius: 5
+      })
+      const node = findNode(element['from'], nodes);
+      circle.bindPopup(`Node: ${node["longName"]}<br>SNR: ${element["snr"]}<br>RSSI: ${element["rssi"]}`);
+      points.push(circle);
+      circle.addTo(map);
+    }
   }
+
 
   //Set legend
   var legend = L.control({position: 'bottomright'});
@@ -77,4 +82,22 @@ $.ajax({
     return div;
   };
   legend.addTo(map);
+}
+
+var map = L.map('map', {center: L.latLng(51.9733648, 5.669929), zoom: 15});
+L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png').addTo(map);
+
+$.ajax({
+  url: "https://portal.nurdspace.nl/sdr/api/locations",
+  dataType: 'json',
+  cache: false
+}).done(function(posData){
+  $.ajax({
+    url: "https://portal.nurdspace.nl/sdr/api/nodes",
+    dataType: 'json',
+    cache: false
+  }).done(function(nodesData){
+    drawMap(posData,nodesData);
+  });
 });
+
