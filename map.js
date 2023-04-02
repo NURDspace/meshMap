@@ -32,7 +32,7 @@ function findNode(node, nodes) {
   for (const nd of nodes) {
     if (nd['id'] === node) return nd;
   }
-  return {'id': node, "longName": node, "shortName":"notf","macaddr":"","hwModel":"","lastSeen":-1}
+  return {'id': 0, "longName": node, "shortName":"notf","macaddr":"","hwModel":"","lastSeen":-1}
 }
 
 function timeAlpha(time, rangeLow, rangeHigh) {
@@ -103,10 +103,12 @@ function drawMap(layerControl, data, nodes) {
         snrRange: [lowSnr,highSnr],
         rssiRange: [lowRssi, highRssi]
       })
-      if (nodeList[element['from']] === undefined) nodeList[element['from']] = [];
-      circle.bindPopup(`Node: ${node["longName"]}<br>SNR: ${element["snr"]}<br>RSSI: ${element["rssi"]}`);
-      nodeList[element['from']].push(circle);
-      //circle.addTo(map);
+      if (node['id'] !== 0) {
+        if (nodeList[element['from']] === undefined) nodeList[element['from']] = [];
+        circle.bindPopup(`Node: ${node["longName"]}<br>SNR: ${element["snr"]}<br>RSSI: ${element["rssi"]}`);
+        nodeList[element['from']].push(circle);
+        //circle.addTo(map);
+      }
     }
   }
 
