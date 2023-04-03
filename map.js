@@ -1,8 +1,12 @@
 var firstRun = false;
 var LayerGroups = [];
 var legendLayer = false;
-var timeRangeMax = [0, 86400];
-var timeRange = [0, 86400];
+var timeRangeMax = [-86400, 0];
+var timeRange = [-86400, 0];
+var nodesCache = {};
+var snr = [];
+var rssi = [];
+var viewMode = "snr";
 
 function mapBetween(currentNum, minAllowed, maxAllowed, min, max) {
   return (maxAllowed - minAllowed) * (currentNum- min) / (max - min) + minAllowed;
@@ -36,12 +40,12 @@ function findNode(node, nodes) {
 }
 
 function timeAlpha(time, rangeLow, rangeHigh) {
-  const invertRangeLow = timeRangeMax[1] - rangeLow;
-  const invertRangeHigh = timeRangeMax[1] - rangeHigh;
+  const invertRangeLow = rangeLow * -1;
+  const invertRangeHigh = (rangeHigh>=0?0:rangeHigh * -1);
   const currentTime = Math.floor(Date.now() / 1000);
   const diff = currentTime - time;
   if (diff <= invertRangeLow && diff >= invertRangeHigh) {
-    return mapBetween(diff, 0, 100, invertRangeLow, invertRangeHigh) / 100;
+    return mapBetween(diff, 10, 100, invertRangeLow, invertRangeHigh) / 100;
   }
   return 0;
 }
@@ -71,10 +75,10 @@ function legend(low,high,name){
   legend.addTo(map);
   return legend;
 }
-
+function drawSliderValue(values) {
+  $( "#value" ).html( (values[ 0 ] * -1) + " - " + (values[ 1 ]==0?0:values[ 1 ] * -1) );
+}
 function drawMap(layerControl, data, nodes) {
-  var snr = [];
-  var rssi = [];
 
   for (const element of data) {
     snr.push(element["snr"]);
@@ -86,15 +90,21 @@ function drawMap(layerControl, data, nodes) {
   var lowSnr  = Math.floor(Math.min.apply(Math, snr));
   var highRssi = Math.ceil(Math.max.apply(Math, rssi));
   var lowRssi  = Math.floor(Math.min.apply(Math, rssi));
+  var oldest = Math.floor(Date.now() / 1000);
+  var current = Math.floor(Date.now() / 1000);
 
   //Add Elements
   let nodeList = {};
   for (const element of data) {
     if (element["lat"] && element["lon"]) {
+      if (element["time"] < oldest) {
+        oldest = element["time"]
+        timeRangeMax[0] = (current - oldest) * -1;
+      }
       const node = findNode(element['from'], nodes);
       var circle = L.circle([element["lat"], element["lon"]], {
-        color: perc2color(element["snr"],lowSnr,highSnr),
-        fillColor: perc2color(element["snr"],lowSnr,highSnr),
+        color: perc2color(element[viewMode],lowSnr,highSnr),
+        fillColor: perc2color(element[viewMode],lowSnr,highSnr),
         fillOpacity: timeAlpha(element['time'], timeRange[0], timeRange[1]),
         opacity: timeAlpha(element['time'], timeRange[0], timeRange[1]),
         radius: 5,
@@ -105,9 +115,8 @@ function drawMap(layerControl, data, nodes) {
       })
       if (node['id'] !== 0) {
         if (nodeList[element['from']] === undefined) nodeList[element['from']] = [];
-        circle.bindPopup(`Node: ${node["longName"]}<br>SNR: ${element["snr"]}<br>RSSI: ${element["rssi"]}`);
+        circle.bindPopup(`Node: ${node["longName"]}<br>SNR: ${element["snr"].toFixed(2)}<br>RSSI: ${element["rssi"].toFixed(2)}<br>Time: ${new Date(element['time']*1000)}`);
         nodeList[element['from']].push(circle);
-        //circle.addTo(map);
       }
     }
   }
@@ -121,9 +130,14 @@ function drawMap(layerControl, data, nodes) {
   if (legendLayer)
     legendLayer.remove();
   legendLayer = legend(lowSnr, highSnr, "SNR");
+  $('#slider').slider('option', 'min', timeRangeMax[0]);
+  $('#slider').slider('option', 'values', timeRangeMax);
+  drawSliderValue(timeRangeMax);
+  updateTimeRange(timeRangeMax);
 }
 
 function showRSSIButton() {
+  viewMode = "rssi";
   legendLayer.remove();
   let layerDone = false;
   for (var key in LayerGroups) {
@@ -139,6 +153,7 @@ function showRSSIButton() {
 }
 
 function showSNRButton() {
+  viewMode = "snr";
   legendLayer.remove();
   let layerDone = false;
   for (var key in LayerGroups) {
@@ -165,6 +180,8 @@ function updateTimeRange(range) {
 }
 
 function updateMap() {
+  snr = [];
+  rssi = [];
   for (var key in LayerGroups) {
     LayerGroups[key].eachLayer(function(layer) {
       LayerGroups[key].removeLayer(layer);
@@ -181,6 +198,7 @@ function updateMap() {
       dataType: 'json',
       cache: false
     }).done(function(nodesData){
+      nodesCache = nodesData;
       drawMap(layerControl, posData,nodesData);
       firstRun = true;
     });
@@ -200,9 +218,49 @@ const layerControl = L.control.layers(baseLayers, {}).addTo(map);
 
 updateMap();
 
-webSocket = new WebSocket("wss://portal.nurdspace.nl/ws", "dingen");
+webSocket = new WebSocket("wss://portal.nurdspace.nl/ws");
 webSocket.onmessage = (event) => {
-  console.log(event.data);
+  const element = JSON.parse(event.data)['locationUpdate'];
+  if (element["lat"] && element["lon"]) {
+    snr.push(element["snr"]);
+    rssi.push(element["rssi"]);
+    //Calc low and highs
+    var highSnr = Math.ceil(Math.max.apply(Math, snr));
+    var lowSnr  = Math.floor(Math.min.apply(Math, snr));
+    var highRssi = Math.ceil(Math.max.apply(Math, rssi));
+    var lowRssi  = Math.floor(Math.min.apply(Math, rssi));
+    const node = findNode(element['from'], nodesCache);
+    var circle = L.circle([element["lat"], element["lon"]], {
+      color: perc2color(element[viewMode],lowSnr,highSnr),
+      fillColor: perc2color(element[viewMode],lowSnr,highSnr),
+      fillOpacity: timeAlpha(element['time'], timeRange[0], timeRange[1]),
+      opacity: timeAlpha(element['time'], timeRange[0], timeRange[1]),
+      radius: 5,
+      node: node,
+      data: element,
+      snrRange: [lowSnr,highSnr],
+      rssiRange: [lowRssi, highRssi]
+    })
+    if (node['id'] !== 0) {
+      circle.bindPopup(`Node: ${node["longName"]}<br>SNR: ${element["snr"].toFixed(2)}<br>RSSI: ${element["rssi"].toFixed(2)}<br>Time: ${new Date(element['time']*1000)}`);
+      if (LayerGroups[element['from']]) {
+        LayerGroups[element['from']].addLayer(circle);
+      }
+    }
+  }
+};
+webSocket.onclose = function(event) {
+  if (event.wasClean) {
+    console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+  } else {
+    // e.g. server process killed or network down
+    // event.code is usually 1006 in this case
+    console.log('[close] Connection died');
+  }
+};
+
+webSocket.onerror = function(error) {
+  console.log(`[error]`, error);
 };
 
 $( function() {
@@ -212,9 +270,13 @@ $( function() {
     max: timeRangeMax[1],
     step: 60,
     range: true,
+    slide: function( event, ui ) {
+      drawSliderValue(ui.values);
+    },
     stop: function(event, ui) {
       updateTimeRange(ui.values);
       timeRange = ui.values;
     }
   });
+  drawSliderValue(timeRangeMax);
 } );
