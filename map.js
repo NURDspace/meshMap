@@ -189,12 +189,12 @@ function updateMap() {
     layerControl.removeLayer(LayerGroups[key]);
   }
   $.ajax({
-    url: "https://portal.nurdspace.nl/sdr/api/locations",
+    url: "https://mesh.nurd.space/api/locations",
     dataType: 'json',
     cache: false
   }).done(function(posData){
     $.ajax({
-      url: "https://portal.nurdspace.nl/sdr/api/nodes",
+      url: "https://mesh.nurd.space/api/nodes",
       dataType: 'json',
       cache: false
     }).done(function(nodesData){
@@ -218,7 +218,7 @@ const layerControl = L.control.layers(baseLayers, {}).addTo(map);
 
 updateMap();
 
-webSocket = new WebSocket("wss://portal.nurdspace.nl/ws");
+webSocket = new WebSocket("wss://mesh.nurd.space/ws");
 webSocket.onmessage = (event) => {
   const element = JSON.parse(event.data)['locationUpdate'];
   if (element["lat"] && element["lon"]) {
